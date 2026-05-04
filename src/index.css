@@ -1,0 +1,341 @@
+@import "tailwindcss";
+
+/* ════════════════════════════════════════════════════════════════
+   SQUEEGEE — Riso Workshop design system
+   ════════════════════════════════════════════════════════════════ */
+
+@theme {
+  --font-display: "Big Shoulders Display", Impact, "Helvetica Neue", sans-serif;
+  --font-body: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --font-poster: "Redaction", "Redaction 70", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /* paper — warm cream tones, the substrate */
+  --color-paper-50:  #FAF6EC;
+  --color-paper-100: #F2EAD3;
+  --color-paper-200: #E8DEC2;
+  --color-paper-300: #D4C7A6;
+  --color-paper-400: #B8A985;
+
+  /* ink — black through gray on paper */
+  --color-ink-950: #0F0E0E;
+  --color-ink-900: #1F1D1B;
+  --color-ink-800: #2D2A26;
+  --color-ink-700: #4A4744;
+  --color-ink-500: #8C857C;
+  --color-ink-400: #A6A095;
+  --color-ink-300: #C2BCAF;
+
+  /* riso spot colors — the trade's actual palette */
+  --color-riso-pink:   #FF3E5A;
+  --color-riso-cyan:   #0096C7;
+  --color-riso-yellow: #FFE45C;
+  --color-riso-blue:   #2D4FFF;
+  --color-riso-mint:   #5FCEAB;
+
+  --default-font-family: var(--font-body);
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--color-paper-100);
+  color: var(--color-ink-950);
+  overflow-x: hidden;
+}
+
+/* iPhone notch / Android cutout safe areas */
+.safe-top { padding-top: env(safe-area-inset-top, 0); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0); }
+.safe-x { padding-left: env(safe-area-inset-left, 0); padding-right: env(safe-area-inset-right, 0); }
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-feature-settings: "ss01", "ss02";
+  background-image:
+    radial-gradient(rgba(15, 14, 14, 0.055) 1px, transparent 1.2px),
+    radial-gradient(ellipse 90% 60% at 10% -10%, rgba(255, 228, 92, 0.18), transparent 60%),
+    radial-gradient(ellipse 80% 60% at 110% 110%, rgba(255, 62, 90, 0.06), transparent 60%);
+  background-size: 5px 5px, 100% 100%, 100% 100%;
+  background-attachment: fixed;
+}
+
+/* ─── OFF-REGISTER PRINT EFFECT ─────────────────────────
+   The killer detail. Cyan and pink "channel offsets" simulate
+   real screen-print misregistration. Use mix-blend-mode: multiply
+   so spots interact with the paper rather than overlay. */
+
+.off-register {
+  position: relative;
+  color: var(--color-ink-950);
+  isolation: isolate;
+}
+.off-register::before,
+.off-register::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  mix-blend-mode: multiply;
+}
+.off-register::before {
+  color: var(--color-riso-cyan);
+  transform: translate(-2px, -1.5px);
+}
+.off-register::after {
+  color: var(--color-riso-pink);
+  transform: translate(2px, 1.5px);
+}
+@media (min-width: 640px) {
+  .off-register::before { transform: translate(-3px, -2px); }
+  .off-register::after  { transform: translate(3px, 2px); }
+}
+
+.off-register-tight::before { transform: translate(-1px, -0.5px); }
+.off-register-tight::after  { transform: translate(1px, 0.5px); }
+
+/* ─── HALFTONE PATTERNS ───────────────────────── */
+
+.halftone-fine {
+  background-image: radial-gradient(var(--color-ink-950) 0.55px, transparent 0.65px);
+  background-size: 3px 3px;
+}
+.halftone-coarse {
+  background-image: radial-gradient(var(--color-ink-950) 1.1px, transparent 1.3px);
+  background-size: 6px 6px;
+}
+.halftone-pink {
+  background-image: radial-gradient(var(--color-riso-pink) 1px, transparent 1.2px);
+  background-size: 5px 5px;
+}
+.halftone-cyan {
+  background-image: radial-gradient(var(--color-riso-cyan) 1px, transparent 1.2px);
+  background-size: 5px 5px;
+}
+
+.halftone-divider {
+  height: 8px;
+  background-image: radial-gradient(var(--color-ink-950) 1px, transparent 1.3px);
+  background-size: 4px 4px;
+  background-position: center;
+}
+
+/* ─── BRUTALIST CARDS ─────────────────────────
+   2px black border + hard 4px offset shadow, no softness. */
+
+.brut {
+  border: 2px solid var(--color-ink-950);
+  background: var(--color-paper-50);
+  box-shadow: 4px 4px 0 0 var(--color-ink-950);
+  position: relative;
+}
+.brut-lg { box-shadow: 6px 6px 0 0 var(--color-ink-950); }
+.brut-pink { box-shadow: 4px 4px 0 0 var(--color-riso-pink); }
+.brut-cyan { box-shadow: 4px 4px 0 0 var(--color-riso-cyan); }
+
+.brut-button {
+  border: 2px solid var(--color-ink-950);
+  background: var(--color-paper-50);
+  box-shadow: 3px 3px 0 0 var(--color-ink-950);
+  transition: transform 80ms ease-out, box-shadow 80ms ease-out;
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+}
+.brut-button:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 0 var(--color-ink-950);
+}
+.brut-button:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 0 var(--color-ink-950);
+}
+
+.brut-button-pink { background: var(--color-riso-pink); color: var(--color-paper-50); }
+.brut-button-cyan { background: var(--color-riso-cyan); color: var(--color-paper-50); }
+.brut-button-ink  { background: var(--color-ink-950);   color: var(--color-paper-50); }
+
+/* ─── REGISTRATION CROSSHAIRS ─────────────────────────
+   Corner ornaments mimicking print bleed marks. */
+
+.reg-mark {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+.reg-mark::before,
+.reg-mark::after {
+  content: "";
+  position: absolute;
+  background: var(--color-ink-950);
+}
+.reg-mark::before {
+  top: 50%; left: 0; right: 0;
+  height: 1.5px;
+  transform: translateY(-50%);
+}
+.reg-mark::after {
+  left: 50%; top: 0; bottom: 0;
+  width: 1.5px;
+  transform: translateX(-50%);
+}
+.reg-mark-pink::before, .reg-mark-pink::after { background: var(--color-riso-pink); }
+.reg-mark-cyan::before, .reg-mark-cyan::after { background: var(--color-riso-cyan); }
+
+/* ─── TAPE STRIP (skeuomorphic) ───────────────────────── */
+
+.tape {
+  position: absolute;
+  background: rgba(255, 228, 92, 0.7);
+  border-left: 1px dashed rgba(15, 14, 14, 0.18);
+  border-right: 1px dashed rgba(15, 14, 14, 0.18);
+  height: 26px;
+  width: 84px;
+  transform: rotate(-4deg);
+  box-shadow:
+    0 1px 2px rgba(15, 14, 14, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+
+/* ─── MARQUEE (workshop ticker) ───────────────────────── */
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  display: inline-flex;
+  gap: 3rem;
+  white-space: nowrap;
+  animation: marquee 60s linear infinite;
+  padding-right: 3rem;
+}
+
+/* ─── HAND-TACKED ROTATIONS ───────────────────────── */
+
+.tilt-1 { transform: rotate(-0.4deg); }
+.tilt-2 { transform: rotate(0.5deg); }
+.tilt-3 { transform: rotate(-0.25deg); }
+.tilt-4 { transform: rotate(0.3deg); }
+
+/* ─── NUMBER INPUTS ───────────────────────── */
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] { -moz-appearance: textfield; }
+
+/* ─── RANGE: hand-marked gauge ───────────────────────── */
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  height: 32px;
+  width: 100%;
+  cursor: ew-resize;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--color-ink-950);
+  border: 0;
+}
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  background: var(--color-ink-950);
+  border: 0;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  background: var(--color-riso-pink);
+  border: 2px solid var(--color-ink-950);
+  margin-top: -10px;
+  cursor: ew-resize;
+  box-shadow: 2px 2px 0 var(--color-ink-950);
+  border-radius: 0;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  background: var(--color-riso-pink);
+  border: 2px solid var(--color-ink-950);
+  cursor: ew-resize;
+  box-shadow: 2px 2px 0 var(--color-ink-950);
+  border-radius: 0;
+}
+
+::selection {
+  background: var(--color-riso-yellow);
+  color: var(--color-ink-950);
+}
+
+/* ─── SCROLLBARS ───────────────────────── */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-700) transparent;
+}
+
+/* ─── ENTRANCE STAGGER ───────────────────────── */
+
+@keyframes ink-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes ink-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.ink-down { animation: ink-down 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+.ink-rise { animation: ink-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+
+/* ─── PERFORATED EDGE ─────────────────────────
+   For tear-off receipts and form sections. */
+
+.perforated-bottom {
+  --dot: var(--color-ink-950);
+  background-image:
+    radial-gradient(circle at center, transparent 4px, var(--color-paper-50) 4.5px);
+  background-size: 12px 100%;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+  position: relative;
+}
+
+/* ─── PRESS PRINTED H-RULE ───────────────────────── */
+
+.press-rule {
+  height: 2px;
+  background: var(--color-ink-950);
+  position: relative;
+}
+.press-rule::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0;
+  top: 4px;
+  height: 1px;
+  background: var(--color-ink-950);
+  opacity: 0.45;
+}
+
+/* ─── INK WEAR (subtle) ─────────────────────────
+   For the wordmark and big display text. Uses the Redaction
+   font's intrinsic ink-decay for character. */
+
+.ink-wear {
+  font-family: var(--font-poster);
+  letter-spacing: -0.02em;
+}
