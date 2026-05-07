@@ -229,3 +229,19 @@ export function findPigment(
   if (system.base.id === pigmentId) return system.base;
   return system.pigments.find((p) => p.id === pigmentId);
 }
+
+// Apply per-pigment HEX overrides (from shop calibration) to a system.
+// Returns a fresh system; the original is untouched.
+export function calibratedSystem(
+  system: PigmentSystem,
+  overrides: Record<string, string>,
+): PigmentSystem {
+  if (!overrides || Object.keys(overrides).length === 0) return system;
+  const apply = (p: Pigment): Pigment =>
+    overrides[p.id] ? { ...p, hex: overrides[p.id], estimated: false } : p;
+  return {
+    ...system,
+    base: apply(system.base),
+    pigments: system.pigments.map(apply),
+  };
+}

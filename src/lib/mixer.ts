@@ -306,6 +306,163 @@ export function deltaEConfidence(
   return { tier: "poor", label: "Off — try a different combo" };
 }
 
+// ─── Recipe text parser (paste-from-CMS) ────────────────────────
+// Best-effort parser for ink-mixing formulas a shop pastes from a tool like
+// Matsui CMS, ColorMixer output, a notebook, etc. Tolerates many formats.
+
+export type PasteParseResult = {
+  ingredients: Ingredient[];
+  warnings: string[];
+  matchedNames: string[];
+};
+
+export function parseRecipeText(
+  text: string,
+  system: PigmentSystem,
+): PasteParseResult {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const allPigments: Pigment[] = [system.base, ...system.pigments];
+  const ingredientsRaw: Array<{
+    pigmentId: string;
+    name: string;
+    grams?: number;
+    pct?: number;
+  }> = [];
+  const warnings: string[] = [];
+  const matchedNames: string[] = [];
+
+  for (const line of lines) {
+    // Find longest-matching pigment name in the line.
+    let bestMatch: Pigment | null = null;
+    let bestLen = 0;
+    for (const p of allPigments) {
+      const candidates: string[] = [p.name];
+      if (p.shorthand) candidates.push(p.shorthand);
+      // Also try last word of name (e.g. "Yellow M3G" → "M3G")
+      const parts = p.name.split(/\s+/).filter((w) => w.length >= 2);
+      candidates.push(...parts);
+      for (const c of candidates) {
+        if (c.length < 2) continue;
+        const idx = line.toLowerCase().indexOf(c.toLowerCase());
+        if (idx >= 0 && c.length > bestLen) {
+          bestMatch = p;
+          bestLen = c.length;
+        }
+      }
+    }
+    if (!bestMatch) continue;
+
+    // Extract a percentage (preferred) or grams.
+    const pctMatch = line.match(/(\d+(?:\.\d+)?)\s*%/);
+    const gramsMatch = line.match(/(\d+(?:\.\d+)?)\s*(?:g\b|gram)/i);
+    if (pctMatch) {
+      ingredientsRaw.push({
+        pigmentId: bestMatch.id,
+        name: bestMatch.name,
+        pct: parseFloat(pctMatch[1]),
+      });
+      matchedNames.push(`${bestMatch.name} (${pctMatch[1]}%)`);
+    } else if (gramsMatch) {
+      ingredientsRaw.push({
+        pigmentId: bestMatch.id,
+        name: bestMatch.name,
+        grams: parseFloat(gramsMatch[1]),
+      });
+      matchedNames.push(`${bestMatch.name} (${gramsMatch[1]} g)`);
+    } else {
+      const numMatch = line.match(/(\d+(?:\.\d+)?)/);
+      if (numMatch) {
+        ingredientsRaw.push({
+          pigmentId: bestMatch.id,
+          name: bestMatch.name,
+          pct: parseFloat(numMatch[1]),
+        });
+        matchedNames.push(`${bestMatch.name} (${numMatch[1]} — assumed %)`);
+        warnings.push(
+          `No unit found for "${bestMatch.name}", assuming ${numMatch[1]}%`,
+        );
+      }
+    }
+  }
+
+  if (ingredientsRaw.length === 0) {
+    return {
+      ingredients: [],
+      warnings: ["No pigments matched. Check pigment names match the system."],
+      matchedNames: [],
+    };
+  }
+
+  // Merge to single units. If any line uses grams, convert all to %.
+  const hasGrams = ingredientsRaw.some((i) => i.grams !== undefined);
+  const hasPct = ingredientsRaw.some((i) => i.pct !== undefined);
+
+  let ingredients: Ingredient[];
+  if (hasGrams && !hasPct) {
+    const total = ingredientsRaw.reduce(
+      (acc, i) => acc + (i.grams ?? 0),
+      0,
+    );
+    if (total === 0)
+      return {
+        ingredients: [],
+        warnings: [...warnings, "Total grams = 0"],
+        matchedNames,
+      };
+    ingredients = ingredientsRaw.map((i) => ({
+      pigmentId: i.pigmentId,
+      pct: ((i.grams ?? 0) / total) * 100,
+    }));
+  } else {
+    ingredients = ingredientsRaw
+      .filter((i) => i.pct !== undefined)
+      .map((i) => ({ pigmentId: i.pigmentId, pct: i.pct! }));
+    const sum = ingredients.reduce((acc, i) => acc + i.pct, 0);
+    if (sum === 0)
+      return {
+        ingredients: [],
+        warnings: [...warnings, "Percentages sum to 0"],
+        matchedNames,
+      };
+    if (Math.abs(sum - 100) > 0.5) {
+      warnings.push(
+        `Percentages summed to ${sum.toFixed(1)}% — normalized to 100%.`,
+      );
+      ingredients = ingredients.map((i) => ({
+        pigmentId: i.pigmentId,
+        pct: (i.pct / sum) * 100,
+      }));
+    }
+  }
+
+  return { ingredients, warnings, matchedNames };
+}
+
+// Build a Recipe object from a list of ingredients (used for manual entry).
+export function recipeFromIngredients(
+  ingredients: Ingredient[],
+  system: PigmentSystem,
+  targetHex?: string,
+): Recipe {
+  const predictedHex = predictMixHex(system, ingredients);
+  const dE =
+    targetHex && /^#[0-9a-f]{6}$/i.test(targetHex)
+      ? deltaELab(hexToLab(targetHex), hexToLab(predictedHex))
+      : 0;
+  return {
+    systemId: system.id,
+    ingredients,
+    predictedHex: formatHex(predictedHex) ?? predictedHex,
+    deltaE: dE,
+    pigmentCount: ingredients.filter(
+      (i) => i.pigmentId !== system.base.id && i.pct > 0,
+    ).length,
+  };
+}
+
 // ─── Batch size helpers ─────────────────────────────────────────
 
 export const BATCH_SIZES = [

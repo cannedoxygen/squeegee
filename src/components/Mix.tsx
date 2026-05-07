@@ -1,9 +1,11 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { useStore, type SavedRecipe } from "../state/store";
 import {
   PIGMENT_SYSTEMS,
   SYSTEM_LIST,
+  calibratedSystem,
   findPigment,
+  type Pigment,
   type PigmentSystem,
   type PigmentSystemId,
 } from "../lib/pigments";
@@ -13,8 +15,12 @@ import {
   deltaEConfidence,
   BATCH_SIZES,
   gramsForLabel,
+  parseRecipeText,
+  recipeFromIngredients,
   type Recipe,
+  type Ingredient,
 } from "../lib/mixer";
+import { STARTER_RECIPES, type StarterRecipe } from "../lib/sampleRecipes";
 import {
   Card,
   SectionHeader,
@@ -28,7 +34,14 @@ export function Mix() {
   const saveRecipe = useStore((s) => s.saveRecipe);
   const deleteRecipe = useStore((s) => s.deleteRecipe);
 
-  const system = PIGMENT_SYSTEMS[mixer.systemId];
+  const system = useMemo(
+    () =>
+      calibratedSystem(
+        PIGMENT_SYSTEMS[mixer.systemId],
+        mixer.pigmentOverrides,
+      ),
+    [mixer.systemId, mixer.pigmentOverrides],
+  );
   const deferredTarget = useDeferredValue(mixer.targetHex);
 
   const recipes = useMemo<Recipe[]>(() => {
@@ -49,6 +62,7 @@ export function Mix() {
   const alts = recipes.slice(1);
   const batchGrams = gramsForLabel(mixer.batchLabel);
   const conf = top ? deltaEConfidence(top.deltaE) : null;
+  const [showAdd, setShowAdd] = useState(false);
 
   return (
     <div className="mx-auto max-w-3xl px-3 sm:px-6 pb-20 pt-6 sm:pt-12">
@@ -251,14 +265,47 @@ export function Mix() {
       <div className="ink-rise mb-6" style={{ animationDelay: "300ms" }}>
         <Card paper="50" tilt={2}>
           <div className="p-4 sm:p-6">
-            <SectionHeader num="05" sub={`${mixer.recipeBook.length} saved`}>
-              Recipe Book
-            </SectionHeader>
-            {mixer.recipeBook.length === 0 ? (
+            <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
+              <div className="flex items-baseline gap-3">
+                <span className="font-mono text-[10px] tracking-[0.2em] text-ink-500">
+                  05
+                </span>
+                <h2 className="font-display font-black text-2xl uppercase leading-none tracking-tight text-ink-950">
+                  Recipe Book
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-body italic text-sm text-ink-700">
+                  {mixer.recipeBook.length} saved
+                </span>
+                <button
+                  onClick={() => setShowAdd((v) => !v)}
+                  className="brut-button brut-button-ink px-3 py-1 text-xs uppercase"
+                >
+                  {showAdd ? "Close" : "+ Add"}
+                </button>
+              </div>
+            </div>
+            <div className="press-rule mb-4" />
+
+            {showAdd && (
+              <div className="mb-4">
+                <AddRecipeForm
+                  system={system}
+                  onSave={(payload) => {
+                    saveRecipe(payload);
+                    setShowAdd(false);
+                  }}
+                  onCancel={() => setShowAdd(false)}
+                  defaultBatchLabel={mixer.batchLabel}
+                />
+              </div>
+            )}
+
+            {mixer.recipeBook.length === 0 && !showAdd ? (
               <p className="font-body italic text-sm text-ink-700">
-                Your saved formulas will live here. Hit{" "}
-                <strong className="not-italic">Save Recipe</strong> on a match
-                to add one.
+                Your saved formulas live here. Save an auto-match, paste one
+                from Matsui CMS, or add manually.
               </p>
             ) : (
               <ul className="space-y-2">
@@ -280,6 +327,51 @@ export function Mix() {
             )}
           </div>
         </Card>
+      </div>
+
+      {/* ────────── PUBLIC EXAMPLES ────────── */}
+      <div className="ink-rise mb-6" style={{ animationDelay: "360ms" }}>
+        <Card paper="50" tilt={3}>
+          <div className="p-4 sm:p-6">
+            <SectionHeader
+              num="06"
+              sub="open-source starters"
+            >
+              Public Examples
+            </SectionHeader>
+            <p className="font-body italic text-xs text-ink-700 mb-3">
+              CMYK process formulas openly shared by Matsui distributors as
+              teaching examples. Tap to copy any starter into your Recipe Book.
+            </p>
+            <ul className="space-y-2">
+              {STARTER_RECIPES.map((s) => (
+                <StarterRow
+                  key={s.id}
+                  starter={s}
+                  system={system}
+                  onCopy={() => {
+                    const recipe = recipeFromIngredients(
+                      s.ingredients,
+                      system,
+                    );
+                    saveRecipe({
+                      ...recipe,
+                      targetHex: recipe.predictedHex,
+                      batchLabel: mixer.batchLabel,
+                      name: s.name,
+                      customer: undefined,
+                    });
+                  }}
+                />
+              ))}
+            </ul>
+          </div>
+        </Card>
+      </div>
+
+      {/* ────────── CALIBRATE PIGMENTS ────────── */}
+      <div className="ink-rise mb-6" style={{ animationDelay: "420ms" }}>
+        <CalibrateCard system={system} />
       </div>
 
       <p className="text-center mt-10 font-body italic text-sm text-ink-700">
@@ -681,5 +773,404 @@ function isHex(s: string): boolean {
   return /^#?[0-9A-Fa-f]{6}$/.test(s.replace("#", ""));
 }
 
-// suppress unused import warning; kept for future enhancement (image eyedrop)
-void useEffect;
+/* ─── Add Recipe (manual + paste-from-CMS) ─────────────────── */
+
+function AddRecipeForm({
+  system,
+  onSave,
+  onCancel,
+  defaultBatchLabel,
+}: {
+  system: PigmentSystem;
+  onSave: (payload: Omit<SavedRecipe, "id" | "createdAt">) => void;
+  onCancel: () => void;
+  defaultBatchLabel: string;
+}) {
+  const [mode, setMode] = useState<"manual" | "paste">("manual");
+  const [name, setName] = useState("");
+  const [customer, setCustomer] = useState("");
+  const [pasteText, setPasteText] = useState("");
+  const [manualPcts, setManualPcts] = useState<Record<string, number>>({});
+
+  const allPigments: Pigment[] = useMemo(
+    () => [system.base, ...system.pigments],
+    [system],
+  );
+
+  const parsed = useMemo(() => {
+    if (mode !== "paste" || !pasteText.trim())
+      return { ingredients: [], warnings: [], matchedNames: [] };
+    return parseRecipeText(pasteText, system);
+  }, [mode, pasteText, system]);
+
+  const manualIngredients: Ingredient[] = useMemo(() => {
+    const items = Object.entries(manualPcts)
+      .filter(([, v]) => v > 0)
+      .map(([id, v]) => ({ pigmentId: id, pct: v }));
+    const sum = items.reduce((acc, i) => acc + i.pct, 0);
+    if (sum === 0) return [];
+    return items.map((i) => ({ pigmentId: i.pigmentId, pct: (i.pct / sum) * 100 }));
+  }, [manualPcts]);
+
+  const ingredients = mode === "paste" ? parsed.ingredients : manualIngredients;
+  const previewRecipe = useMemo(() => {
+    if (ingredients.length === 0) return null;
+    try {
+      return recipeFromIngredients(ingredients, system);
+    } catch {
+      return null;
+    }
+  }, [ingredients, system]);
+
+  const canSave = name.trim().length > 0 && ingredients.length > 0;
+
+  return (
+    <div className="border-2 border-ink-950 bg-paper-100 p-3 sm:p-4">
+      {/* mode tabs */}
+      <div className="flex items-stretch mb-3">
+        <button
+          onClick={() => setMode("manual")}
+          className={
+            "border-2 border-ink-950 px-3 py-1 font-display font-black text-xs uppercase tracking-tight " +
+            (mode === "manual"
+              ? "bg-ink-950 text-paper-50"
+              : "bg-paper-50 hover:bg-paper-100")
+          }
+        >
+          Manual
+        </button>
+        <button
+          onClick={() => setMode("paste")}
+          className={
+            "border-2 border-ink-950 -ml-[2px] px-3 py-1 font-display font-black text-xs uppercase tracking-tight " +
+            (mode === "paste"
+              ? "bg-ink-950 text-paper-50"
+              : "bg-paper-50 hover:bg-paper-100")
+          }
+        >
+          Paste from CMS
+        </button>
+      </div>
+
+      <div className="space-y-2 mb-3">
+        <TextInput
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Recipe name (e.g. PMS 185 — Matsui CMS)"
+          className="w-full"
+        />
+        <TextInput
+          value={customer}
+          onChange={(e) => setCustomer(e.target.value)}
+          placeholder="Customer (optional)"
+          className="w-full"
+        />
+      </div>
+
+      {mode === "manual" ? (
+        <div className="border-2 border-dashed border-ink-700 bg-paper-50 p-2 max-h-72 overflow-y-auto">
+          <div className="font-display font-bold text-[10px] uppercase tracking-[0.16em] text-ink-700 mb-2 px-1">
+            Pick pigments + their % of total mix
+          </div>
+          <ul className="space-y-1">
+            {allPigments.map((p) => {
+              const v = manualPcts[p.id] ?? 0;
+              return (
+                <li
+                  key={p.id}
+                  className="grid grid-cols-[20px_1fr_90px_28px] items-center gap-2"
+                >
+                  <span
+                    className="size-4 border border-ink-950"
+                    style={{ background: p.hex }}
+                  />
+                  <span className="font-display font-bold text-sm uppercase tracking-tight text-ink-950 truncate">
+                    {p.name}
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    value={v}
+                    onChange={(e) =>
+                      setManualPcts((m) => ({
+                        ...m,
+                        [p.id]: Number(e.target.value),
+                      }))
+                    }
+                    className="border-2 border-ink-950 bg-paper-50 px-2 py-1 font-mono text-sm tabular-nums text-right outline-none focus:bg-riso-yellow/20"
+                  />
+                  <span className="font-mono text-xs text-ink-700">%</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : (
+        <div>
+          <textarea
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            placeholder={
+              "Paste a Matsui CMS formula here, e.g.:\n\nClear 301 Base  209.4 g\nNeo Rose MB     12.0 g\nNeo Yellow M3G   5.4 g"
+            }
+            className="w-full h-40 border-2 border-ink-950 bg-paper-50 p-3 font-mono text-sm text-ink-950 outline-none focus:bg-riso-yellow/20 resize-y"
+          />
+          {parsed.matchedNames.length > 0 && (
+            <div className="mt-2 border-2 border-dashed border-ink-700 bg-paper-50 p-2">
+              <div className="font-display font-bold text-[10px] uppercase tracking-[0.16em] text-riso-cyan mb-1">
+                Matched
+              </div>
+              <ul className="font-mono text-xs space-y-0.5">
+                {parsed.matchedNames.map((n, i) => (
+                  <li key={i} className="text-ink-950">
+                    ✓ {n}
+                  </li>
+                ))}
+              </ul>
+              {parsed.warnings.length > 0 && (
+                <ul className="font-mono text-xs mt-2 space-y-0.5 text-riso-pink">
+                  {parsed.warnings.map((w, i) => (
+                    <li key={i}>⚠ {w}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {pasteText.trim() && parsed.ingredients.length === 0 && (
+            <div className="mt-2 font-mono text-xs text-riso-pink">
+              No pigments matched. Try including the full pigment name (e.g.
+              "Neo Rose MB" rather than "rose").
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* preview */}
+      {previewRecipe && (
+        <div className="mt-3 grid grid-cols-[60px_1fr] items-center gap-3 border-2 border-ink-950 bg-paper-50 p-2">
+          <div
+            className="h-12 border-2 border-ink-950"
+            style={{ background: previewRecipe.predictedHex }}
+          />
+          <div>
+            <div className="font-display font-bold text-sm uppercase tracking-tight text-ink-950">
+              Preview · {previewRecipe.predictedHex.toUpperCase()}
+            </div>
+            <div className="font-body italic text-xs text-ink-700">
+              {previewRecipe.pigmentCount} pigment
+              {previewRecipe.pigmentCount === 1 ? "" : "s"} +{" "}
+              {ingredients.find((i) => i.pigmentId === system.base.id)
+                ? "base"
+                : "no base"}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2 mt-3">
+        <button
+          onClick={() => {
+            if (!canSave || !previewRecipe) return;
+            onSave({
+              ...previewRecipe,
+              name: name.trim(),
+              customer: customer.trim() || undefined,
+              targetHex: previewRecipe.predictedHex,
+              batchLabel: defaultBatchLabel,
+            });
+          }}
+          disabled={!canSave || !previewRecipe}
+          className="brut-button brut-button-cyan flex-1 px-4 py-2 text-sm uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Save to Recipe Book
+        </button>
+        <button
+          onClick={onCancel}
+          className="brut-button px-4 py-2 text-sm uppercase"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Starter recipe row (Public Examples) ─────────────────── */
+
+function StarterRow({
+  starter,
+  system,
+  onCopy,
+}: {
+  starter: StarterRecipe;
+  system: PigmentSystem;
+  onCopy: () => void;
+}) {
+  const recipe = useMemo(
+    () => recipeFromIngredients(starter.ingredients, system),
+    [starter, system],
+  );
+  return (
+    <li className="grid grid-cols-[44px_1fr_auto] items-center gap-3 border-2 border-ink-950 bg-paper-50 p-2">
+      <div
+        className="h-10 w-10 border-2 border-ink-950"
+        style={{ background: recipe.predictedHex }}
+      />
+      <div>
+        <div className="font-display font-bold text-base uppercase tracking-tight text-ink-950 leading-tight">
+          {starter.name}
+        </div>
+        <div className="font-body italic text-xs text-ink-700">
+          {starter.description}
+        </div>
+      </div>
+      <button
+        onClick={onCopy}
+        className="brut-button brut-button-cyan px-3 py-1 text-[10px] uppercase"
+      >
+        Copy →
+      </button>
+    </li>
+  );
+}
+
+/* ─── Calibrate Pigments collapsible ─────────────────── */
+
+function CalibrateCard({ system }: { system: PigmentSystem }) {
+  const overrides = useStore((s) => s.mixer.pigmentOverrides);
+  const setPigmentOverride = useStore((s) => s.setPigmentOverride);
+  const resetPigmentOverrides = useStore((s) => s.resetPigmentOverrides);
+  const [open, setOpen] = useState(false);
+
+  const overrideCount = Object.keys(overrides).length;
+
+  return (
+    <Card paper="50" tilt={4}>
+      <div className="p-4 sm:p-6">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-baseline justify-between gap-3 w-full text-left"
+        >
+          <div className="flex items-baseline gap-3">
+            <span className="font-mono text-[10px] tracking-[0.2em] text-ink-500">
+              07
+            </span>
+            <h2 className="font-display font-black text-2xl uppercase leading-none tracking-tight text-ink-950">
+              Calibrate Pigments
+            </h2>
+          </div>
+          <span className="font-display font-black text-xl">
+            {open ? "−" : "+"}
+          </span>
+        </button>
+        <div className="press-rule mt-2 mb-4" />
+
+        {!open ? (
+          <p className="font-body italic text-sm text-ink-700">
+            Override any pigment's HEX with what you actually print. Mixer
+            accuracy improves immediately.
+            {overrideCount > 0 && (
+              <>
+                {" "}
+                <span className="not-italic font-display font-bold text-riso-cyan">
+                  {overrideCount} calibrated
+                </span>
+              </>
+            )}
+          </p>
+        ) : (
+          <>
+            <p className="font-body italic text-xs text-ink-700 mb-3">
+              Print a swatch of each pigment at full strength. Sample with your
+              phone camera or a color picker. Paste the HEX here.
+            </p>
+            <ul className="space-y-2">
+              {[system.base, ...system.pigments].map((p) => (
+                <CalibrateRow
+                  key={p.id}
+                  pigment={p}
+                  overridden={!!overrides[p.id]}
+                  onChange={(hex) => setPigmentOverride(p.id, hex)}
+                />
+              ))}
+            </ul>
+            {overrideCount > 0 && (
+              <button
+                onClick={() => {
+                  if (
+                    confirm("Reset all pigment HEX overrides to estimated defaults?")
+                  )
+                    resetPigmentOverrides();
+                }}
+                className="mt-4 brut-button brut-button-pink px-3 py-2 text-[10px] uppercase"
+              >
+                Reset all calibrations
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function CalibrateRow({
+  pigment,
+  overridden,
+  onChange,
+}: {
+  pigment: Pigment;
+  overridden: boolean;
+  onChange: (hex: string | null) => void;
+}) {
+  return (
+    <li className="grid grid-cols-[44px_1fr_120px_28px] items-center gap-2 border-2 border-ink-950 bg-paper-50 p-2">
+      <label className="h-10 w-10 border-2 border-ink-950 cursor-pointer relative overflow-hidden">
+        <span
+          className="block w-full h-full"
+          style={{ background: pigment.hex }}
+        />
+        <input
+          type="color"
+          value={pigment.hex}
+          onChange={(e) => onChange(e.target.value)}
+          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+        />
+      </label>
+      <div>
+        <div className="font-display font-bold text-sm uppercase tracking-tight text-ink-950 leading-tight truncate">
+          {pigment.name}
+        </div>
+        {pigment.shorthand && (
+          <div className="font-mono text-[10px] text-ink-500">
+            {pigment.shorthand}
+          </div>
+        )}
+      </div>
+      <input
+        type="text"
+        value={pigment.hex.toUpperCase()}
+        onChange={(e) => {
+          const v = e.target.value.trim();
+          if (/^#?[0-9A-Fa-f]{6}$/.test(v)) {
+            onChange(v.startsWith("#") ? v : `#${v}`);
+          }
+        }}
+        className="border-2 border-ink-950 bg-paper-50 px-2 py-1 font-mono text-xs uppercase tabular-nums text-center outline-none focus:bg-riso-yellow/20"
+      />
+      <button
+        onClick={() => overridden && onChange(null)}
+        disabled={!overridden}
+        title={overridden ? "Reset to estimate" : "Not calibrated"}
+        className={
+          "font-mono text-xs px-1 py-1 " +
+          (overridden ? "text-riso-pink hover:bg-paper-100" : "text-ink-300")
+        }
+      >
+        {overridden ? "↺" : "·"}
+      </button>
+    </li>
+  );
+}

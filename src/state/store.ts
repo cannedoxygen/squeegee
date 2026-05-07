@@ -22,6 +22,9 @@ export type MixerState = {
   batchLabel: string;
   maxComponents: 1 | 2 | 3;
   recipeBook: SavedRecipe[];
+  // Per-pigment HEX overrides keyed by pigmentId. Lets a shop calibrate
+  // estimated swatches to their actual measured pigment colors.
+  pigmentOverrides: Record<string, string>;
 };
 
 type Store = {
@@ -39,6 +42,8 @@ type Store = {
   setMixer: (patch: Partial<MixerState>) => void;
   saveRecipe: (r: Omit<SavedRecipe, "id" | "createdAt">) => void;
   deleteRecipe: (id: string) => void;
+  setPigmentOverride: (pigmentId: string, hex: string | null) => void;
+  resetPigmentOverrides: () => void;
 };
 
 const defaultQuote: QuoteInput = {
@@ -64,6 +69,7 @@ const defaultMixer: MixerState = {
   batchLabel: "8 oz",
   maxComponents: 3,
   recipeBook: [],
+  pigmentOverrides: {},
 };
 
 export const useStore = create<Store>()(
@@ -106,6 +112,15 @@ export const useStore = create<Store>()(
             recipeBook: s.mixer.recipeBook.filter((r) => r.id !== id),
           },
         })),
+      setPigmentOverride: (pigmentId, hex) =>
+        set((s) => {
+          const next = { ...s.mixer.pigmentOverrides };
+          if (hex === null) delete next[pigmentId];
+          else next[pigmentId] = hex;
+          return { mixer: { ...s.mixer, pigmentOverrides: next } };
+        }),
+      resetPigmentOverrides: () =>
+        set((s) => ({ mixer: { ...s.mixer, pigmentOverrides: {} } })),
     }),
     {
       name: "squeegee-v3",
