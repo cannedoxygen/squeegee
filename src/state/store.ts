@@ -2,8 +2,27 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Settings, QuoteInput } from "../lib/types";
 import { DEFAULT_SETTINGS } from "../lib/defaults";
+import type { PigmentSystemId } from "../lib/pigments";
+import type { Recipe } from "../lib/mixer";
 
-type View = "quote" | "matrix" | "settings";
+type View = "quote" | "matrix" | "mix" | "settings";
+
+export type SavedRecipe = Recipe & {
+  id: string;
+  name: string;
+  customer?: string;
+  targetHex: string;
+  batchLabel: string;
+  createdAt: number;
+};
+
+export type MixerState = {
+  systemId: PigmentSystemId;
+  targetHex: string;
+  batchLabel: string;
+  maxComponents: 1 | 2 | 3;
+  recipeBook: SavedRecipe[];
+};
 
 type Store = {
   view: View;
@@ -15,6 +34,11 @@ type Store = {
 
   quote: QuoteInput;
   setQuote: (patch: Partial<QuoteInput>) => void;
+
+  mixer: MixerState;
+  setMixer: (patch: Partial<MixerState>) => void;
+  saveRecipe: (r: Omit<SavedRecipe, "id" | "createdAt">) => void;
+  deleteRecipe: (id: string) => void;
 };
 
 const defaultQuote: QuoteInput = {
@@ -34,6 +58,14 @@ const defaultQuote: QuoteInput = {
   blank5X: 0,
 };
 
+const defaultMixer: MixerState = {
+  systemId: "matsui-neo",
+  targetHex: "#FF3E5A",
+  batchLabel: "8 oz",
+  maxComponents: 3,
+  recipeBook: [],
+};
+
 export const useStore = create<Store>()(
   persist(
     (set) => ({
@@ -46,16 +78,49 @@ export const useStore = create<Store>()(
 
       quote: defaultQuote,
       setQuote: (patch) => set((s) => ({ quote: { ...s.quote, ...patch } })),
+
+      mixer: defaultMixer,
+      setMixer: (patch) =>
+        set((s) => ({ mixer: { ...s.mixer, ...patch } })),
+      saveRecipe: (r) =>
+        set((s) => ({
+          mixer: {
+            ...s.mixer,
+            recipeBook: [
+              {
+                ...r,
+                id:
+                  typeof crypto !== "undefined" && "randomUUID" in crypto
+                    ? crypto.randomUUID()
+                    : Math.random().toString(36).slice(2),
+                createdAt: Date.now(),
+              },
+              ...s.mixer.recipeBook,
+            ],
+          },
+        })),
+      deleteRecipe: (id) =>
+        set((s) => ({
+          mixer: {
+            ...s.mixer,
+            recipeBook: s.mixer.recipeBook.filter((r) => r.id !== id),
+          },
+        })),
     }),
     {
-      name: "squeegee-v2",
-      partialize: (s) => ({ settings: s.settings, quote: s.quote }),
+      name: "squeegee-v3",
+      partialize: (s) => ({
+        settings: s.settings,
+        quote: s.quote,
+        mixer: s.mixer,
+      }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<typeof current>;
         return {
           ...current,
           settings: p.settings ?? current.settings,
           quote: { ...current.quote, ...(p.quote ?? {}) },
+          mixer: { ...current.mixer, ...(p.mixer ?? {}) },
         };
       },
     },

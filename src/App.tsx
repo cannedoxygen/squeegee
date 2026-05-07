@@ -1,6 +1,7 @@
 import { useStore } from "./state/store";
 import { QuoteScreen } from "./components/QuoteScreen";
 import { Matrix } from "./components/Matrix";
+import { Mix } from "./components/Mix";
 import { SettingsPage } from "./components/Settings";
 import { Marquee } from "./components/ui";
 
@@ -34,6 +35,7 @@ export default function App() {
         <div key={view} className="ink-rise">
           {view === "quote" && <QuoteScreen />}
           {view === "matrix" && <Matrix />}
+          {view === "mix" && <Mix />}
           {view === "settings" && <SettingsPage />}
         </div>
       </main>
@@ -92,18 +94,21 @@ function PressLogo() {
   );
 }
 
+type View = "quote" | "matrix" | "mix" | "settings";
+
 function Nav({
   view,
   setView,
 }: {
-  view: "quote" | "matrix" | "settings";
-  setView: (v: "quote" | "matrix" | "settings") => void;
+  view: View;
+  setView: (v: View) => void;
 }) {
   return (
     <nav className="flex items-stretch gap-0">
       <NavTab num="01" label="Quote" active={view === "quote"} onClick={() => setView("quote")} accent="pink" />
       <NavTab num="02" label="Chart" active={view === "matrix"} onClick={() => setView("matrix")} accent="cyan" />
-      <NavTab num="03" label="Setup" active={view === "settings"} onClick={() => setView("settings")} accent="ink" />
+      <NavTab num="03" label="Mix"   active={view === "mix"}    onClick={() => setView("mix")}    accent="yellow" />
+      <NavTab num="04" label="Setup" active={view === "settings"} onClick={() => setView("settings")} accent="ink" />
     </nav>
   );
 }
@@ -119,13 +124,15 @@ function NavTab({
   label: string;
   active: boolean;
   onClick: () => void;
-  accent: "pink" | "cyan" | "ink";
+  accent: "pink" | "cyan" | "yellow" | "ink";
 }) {
   const bg =
     active && accent === "pink"
       ? "bg-riso-pink text-paper-50"
       : active && accent === "cyan"
       ? "bg-riso-cyan text-paper-50"
+      : active && accent === "yellow"
+      ? "bg-riso-yellow text-ink-950"
       : active
       ? "bg-ink-950 text-paper-50"
       : "bg-paper-50 text-ink-950 hover:bg-paper-200";

@@ -12,14 +12,17 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.4",
+    "culori": "^4.0.2",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "serve": "^14.2.6",
+    "spectral.js": "^3.0.0",
     "tailwindcss": "^4.2.4",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/culori": "^4.0.1",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
