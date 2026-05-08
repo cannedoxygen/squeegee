@@ -454,12 +454,13 @@ function SystemChip({
   onClick: () => void;
 }) {
   const dim = !system.available;
+  const typeLabel = system.inkType === "plastisol" ? "Plastisol" : "Waterbase";
   return (
     <button
       onClick={onClick}
       disabled={dim}
       className={
-        "border-2 border-ink-950 px-3 py-2 text-left transition " +
+        "border-2 border-ink-950 px-3 py-2 text-left transition relative " +
         (dim
           ? "bg-paper-200 opacity-60 cursor-not-allowed"
           : active
@@ -467,8 +468,20 @@ function SystemChip({
           : "bg-paper-50 hover:bg-paper-100")
       }
     >
-      <div className="font-mono text-[9px] tracking-[0.2em] text-ink-700">
-        {system.brand}
+      <div className="flex items-baseline justify-between gap-2 mb-0.5">
+        <div className="font-mono text-[9px] tracking-[0.2em] text-ink-700">
+          {system.brand}
+        </div>
+        <span
+          className={
+            "font-display font-black text-[8px] uppercase tracking-[0.16em] px-1.5 border " +
+            (system.inkType === "plastisol"
+              ? "border-riso-pink text-riso-pink"
+              : "border-riso-cyan text-riso-cyan")
+          }
+        >
+          {typeLabel}
+        </span>
       </div>
       <div className="font-display font-black text-base uppercase tracking-tight leading-tight">
         {system.name}
