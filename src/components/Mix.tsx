@@ -339,32 +339,57 @@ export function Mix() {
             >
               Public Examples
             </SectionHeader>
-            <p className="font-body italic text-xs text-ink-700 mb-3">
-              CMYK process formulas openly shared by Matsui distributors as
-              teaching examples. Tap to copy any starter into your Recipe Book.
-            </p>
-            <ul className="space-y-2">
-              {STARTER_RECIPES.map((s) => (
-                <StarterRow
-                  key={s.id}
-                  starter={s}
-                  system={system}
-                  onCopy={() => {
-                    const recipe = recipeFromIngredients(
-                      s.ingredients,
-                      system,
-                    );
-                    saveRecipe({
-                      ...recipe,
-                      targetHex: recipe.predictedHex,
-                      batchLabel: mixer.batchLabel,
-                      name: s.name,
-                      customer: undefined,
-                    });
-                  }}
-                />
-              ))}
-            </ul>
+            {(() => {
+              const matching = STARTER_RECIPES.filter(
+                (s) => s.systemId === system.id,
+              );
+              if (matching.length === 0) {
+                return (
+                  <p className="font-body italic text-sm text-ink-700">
+                    No public starters wired up for {system.brand} yet — they
+                    live with the Matsui Neo system. Switch to{" "}
+                    <strong className="not-italic">Matsui Neo Pigment</strong>{" "}
+                    in The System above to see CMYK process examples.
+                  </p>
+                );
+              }
+              return (
+                <>
+                  <p className="font-body italic text-xs text-ink-700 mb-3">
+                    CMYK process formulas openly shared by{" "}
+                    {system.brand} distributors as teaching examples. Tap to
+                    copy any starter into your Recipe Book.
+                  </p>
+                  <ul className="space-y-2">
+                    {matching.map((s) => (
+                      <StarterRow
+                        key={s.id}
+                        starter={s}
+                        system={system}
+                        onCopy={() => {
+                          try {
+                            const recipe = recipeFromIngredients(
+                              s.ingredients,
+                              system,
+                            );
+                            saveRecipe({
+                              ...recipe,
+                              targetHex: recipe.predictedHex,
+                              batchLabel: mixer.batchLabel,
+                              name: s.name,
+                              customer: undefined,
+                            });
+                          } catch {
+                            // recipe references pigments that aren't in the
+                            // selected system — silently skip
+                          }
+                        }}
+                      />
+                    ))}
+                  </ul>
+                </>
+              );
+            })()}
           </div>
         </Card>
       </div>
@@ -1021,10 +1046,14 @@ function StarterRow({
   system: PigmentSystem;
   onCopy: () => void;
 }) {
-  const recipe = useMemo(
-    () => recipeFromIngredients(starter.ingredients, system),
-    [starter, system],
-  );
+  const recipe = useMemo(() => {
+    try {
+      return recipeFromIngredients(starter.ingredients, system);
+    } catch {
+      return null;
+    }
+  }, [starter, system]);
+  if (!recipe) return null;
   return (
     <li className="grid grid-cols-[44px_1fr_auto] items-center gap-3 border-2 border-ink-950 bg-paper-50 p-2">
       <div
